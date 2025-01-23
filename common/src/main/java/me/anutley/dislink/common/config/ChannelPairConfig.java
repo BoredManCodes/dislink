@@ -33,8 +33,9 @@ import org.spongepowered.configurate.objectmapping.meta.Comment;
 public class ChannelPairConfig {
 
     @Comment("""
-            channel-id: The ID of the channel you want chat to be forwarded to/from. This can be any type of thread channelThe URL of the webhook you want the bot to use.
+            channel-id: The ID of the channel you want chat to be forwarded to/from. This can be any type of thread channel.
             webhook-url: The url of the webhook. Given that auto-create-webhooks is enabled in "main.conf" and the bot has MANAGE_WEBHOOKS permissions in the channel, these will be created and saved for you.
+            Side note: currently due to a Discord limitation, if you want custom emotes to be forwarded you will need to create the webhook yourself (disabling the auto create webhook feature) and paste the URL here, as Discord doesn't allow webhooks to send custom emotes from other servers.
             """)
     private ChannelConfig firstChannel = new ChannelConfig();
 
