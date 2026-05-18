@@ -23,46 +23,50 @@ If you need support with DisLink please [join my Discord server](https://discord
 ### Global Settings
 Global settings can be found in `global-settings.conf` and define the default values for forwarding messages. This means the `channel-settings` block in `channels.conf` can be deleted to remove repetition if you want all forwarding to be the same format
 
-### Multiple channels
-To forward between multiple channels you just need to add another block in channels.conf. In this example we will omit the `channel-settings` option and just take the global settings from `global-settings.conf`
+### Channel groups
+A channel group is a set of channels that forward messages between each other. Each channel in a group has independent `read` and `write` flags:
+* `read = true` — messages sent in this channel get forwarded to other members
+* `write = true` — messages from other members get forwarded into this channel
 
-For example: 
+Both default to `true`, which gives you two-way mirroring. Drop one to make a channel send-only or receive-only.
+
 ```yaml
 channels = [
   {
-    # Values available: FIRST_TO_SECOND, SECOND_TO_FIRST & BOTH
-    direction = BOTH
-    # channel-id: The ID of the channel you want chat to be forwarded to/from. This can be any type of thread channelThe URL of the webhook you want the bot to use.
-    # webhook-url: The url of the webhook. Given that auto-create-webhooks is enabled in "main.conf" and the bot has MANAGE_WEBHOOKS permissions in the channel, these will be created and saved for you.
-    first-channel {
-      channel-id = "12345"
-      webhook-url = ""
-    }
-    second-channel {
-      channel-id = "54321"
-      webhook-url = ""
-    }
-    # Values available: WEBHOOK & PLAINTEXT
+    # Optional. Used to match channel-settings overrides across config reloads.
+    group-id = "main-bridge"
+    # WEBHOOK or PLAINTEXT
     type = WEBHOOK
+    members = [
+      { channel-id = "12345", webhook-url = "", read = true, write = true },
+      { channel-id = "54321", webhook-url = "", read = true, write = true },
+      # A read-only mirror: receives messages from the others but doesn't push its own back
+      { channel-id = "99999", webhook-url = "", read = false, write = true }
+    ]
   },
   {
-    # Values available: FIRST_TO_SECOND, SECOND_TO_FIRST & BOTH
-    direction = BOTH
-    # channel-id: The ID of the channel you want chat to be forwarded to/from. This can be any type of thread channelThe URL of the webhook you want the bot to use.
-    # webhook-url: The url of the webhook. Given that auto-create-webhooks is enabled in "main.conf" and the bot has MANAGE_WEBHOOKS permissions in the channel, these will be created and saved for you.
-    first-channel {
-      channel-id = "56789"
-      webhook-url = ""
-    }
-    second-channel {
-      channel-id = "98765"
-      webhook-url = ""
-    }
-    # Values available: WEBHOOK & PLAINTEXT
+    group-id = "announcements"
     type = WEBHOOK
+    members = [
+      { channel-id = "56789", webhook-url = "", read = true, write = false },
+      { channel-id = "98765", webhook-url = "", read = false, write = true }
+    ]
   }
 ]
 ```
+
+`webhook-url` is filled in automatically when `auto-create-webhooks` is enabled in `main.conf` and the bot has `MANAGE_WEBHOOKS` in each channel. Custom emotes from other servers need a hand-created webhook URL pasted in — Discord blocks auto-created webhooks from sending them.
+
+### Migrating from the old two-channel config
+The pre-v2.1 `first-channel` / `second-channel` / `direction` form still loads — you don't have to touch your existing config. It maps to the new schema like this:
+
+| Old `direction`     | Equivalent `members` flags                                                 |
+|---------------------|----------------------------------------------------------------------------|
+| `BOTH`              | both channels `read = true, write = true`                                  |
+| `FIRST_TO_SECOND`   | first `read = true, write = false`, second `read = false, write = true`    |
+| `SECOND_TO_FIRST`   | first `read = false, write = true`, second `read = true, write = false`    |
+
+When you're ready to migrate, replace the `first-channel` / `second-channel` / `direction` block with a `members` list. The `channel-settings` block keeps working — to be sure overrides match across upgrades, set a `group-id`.
 ## Placeholders available
 * `%message%`
 

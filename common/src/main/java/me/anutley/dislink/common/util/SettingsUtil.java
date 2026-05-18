@@ -26,6 +26,7 @@ package me.anutley.dislink.common.util;
 
 import me.anutley.dislink.common.DisLink;
 import me.anutley.dislink.common.config.ChannelPairConfig;
+import me.anutley.dislink.common.config.ChannelPairConfig.ChannelConfig;
 import org.spongepowered.configurate.ConfigurationNode;
 
 import java.util.Optional;
@@ -44,15 +45,7 @@ public class SettingsUtil {
         ConfigurationNode globalSettingsNode = disLink.configLoader().originalGlobalSettingsNode();
 
         Optional<? extends ConfigurationNode> channelNodeOptional = originalChannelsNode.node("channels").childrenList()
-                .stream().filter(channel -> {
-                    String firstChannel = channel.node("first-channel").node("channel-id").getString();
-                    String secondChannel = channel.node("second-channel").node("channel-id").getString();
-
-                    if (firstChannel == null || secondChannel == null) return false;
-
-                    return channelPair.firstChannel().channelId().equals(firstChannel) && channelPair.secondChannel().channelId().equals(secondChannel);
-
-                })
+                .stream().filter(node -> matchesGroup(node, channelPair))
                 .findFirst();
 
         Object[] settings = setting.split("\\.");
@@ -67,6 +60,29 @@ public class SettingsUtil {
         return globalSettingsNode.node("global-settings").node(settings).virtual() ?
                 disLink.configLoader().globalSettingsNode().node("global-settings").node(settings) :
                 globalSettingsNode.node("global-settings").node(settings);
+    }
+
+    private static boolean matchesGroup(ConfigurationNode node, ChannelPairConfig group) {
+        String groupId = group.groupId();
+        String nodeGroupId = node.node("group-id").getString("");
+
+        if (groupId != null && !groupId.isEmpty() && !nodeGroupId.isEmpty()) {
+            return groupId.equals(nodeGroupId);
+        }
+
+        ChannelConfig first = group.firstChannel();
+        ChannelConfig second = group.secondChannel();
+        if (first != null && second != null) {
+            String nodeFirst = node.node("first-channel").node("channel-id").getString();
+            String nodeSecond = node.node("second-channel").node("channel-id").getString();
+            if (nodeFirst != null && nodeSecond != null
+                    && first.channelId().equals(nodeFirst)
+                    && second.channelId().equals(nodeSecond)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public String getString(ChannelPairConfig channelPair, String setting) {
