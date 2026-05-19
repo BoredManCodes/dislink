@@ -27,7 +27,6 @@ package me.anutley.dislink.common.listener;
 import me.anutley.dislink.common.DisLink;
 import me.anutley.dislink.common.config.ChannelPairConfig;
 import me.anutley.dislink.common.config.ChannelPairConfig.ChannelConfig;
-import me.anutley.dislink.common.config.ChannelPairConfig.Direction;
 import me.anutley.dislink.common.delivery.sender.MessageSender;
 import me.anutley.dislink.common.delivery.sender.PlainTextSender;
 import me.anutley.dislink.common.delivery.sender.WebhookSender;
@@ -35,8 +34,8 @@ import net.dv8tion.jda.api.entities.channel.unions.GuildMessageChannelUnion;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MessageListener extends ListenerAdapter {
 
@@ -46,88 +45,77 @@ public class MessageListener extends ListenerAdapter {
         this.disLink = disLink;
     }
 
+    private record Route(ChannelPairConfig group, ChannelConfig origin, ChannelConfig destination) {}
+
     @Override
     public void onMessageReceived(MessageReceivedEvent event) {
 
         if (!event.isFromGuild()) return;
 
-        getDestinationChannels(event.getGuildChannel()).forEach((channelPair, destinationChannel) -> {
+        for (Route route : routesFor(event.getGuildChannel())) {
 
-            if (invalidAuthor(channelPair, event)) return;
-
-            ChannelConfig originChannel = channelPair.firstChannel().channelId().equals(destinationChannel.channelId()) ?
-                    channelPair.secondChannel() : channelPair.firstChannel();
+            if (invalidAuthor(route.group(), event)) continue;
 
             MessageSender<?, ?> delivery;
 
-            if (channelPair.type().equals(MessageSender.Type.WEBHOOK)) {
+            if (route.group().type().equals(MessageSender.Type.WEBHOOK)) {
                 delivery = new WebhookSender(
                         disLink,
-                        channelPair,
-                        originChannel,
-                        destinationChannel,
+                        route.group(),
+                        route.origin(),
+                        route.destination(),
                         event.getMessage()
                 );
             } else {
                 delivery = new PlainTextSender(
                         disLink,
-                        channelPair,
-                        originChannel,
-                        destinationChannel,
+                        route.group(),
+                        route.origin(),
+                        route.destination(),
                         event.getMessage()
                 );
             }
 
             delivery.execute();
-
-        });
+        }
     }
 
-    private Map<ChannelPairConfig, ChannelConfig> getDestinationChannels(GuildMessageChannelUnion channel) {
+    private List<Route> routesFor(GuildMessageChannelUnion channel) {
         String originChannelId = channel.getId();
+        List<Route> routes = new ArrayList<>();
 
-        Map<ChannelPairConfig, ChannelConfig> channels = new HashMap<>();
+        for (ChannelPairConfig group : disLink.configManager().channelsConfig().channels()) {
 
-        for (ChannelPairConfig pairConfig : disLink.configManager().channelsConfig().channels()) {
+            List<ChannelConfig> members = group.effectiveMembers();
 
-            ChannelConfig firstChannel = pairConfig.firstChannel();
-            ChannelConfig secondChannel = pairConfig.secondChannel();
-
-
-            Direction direction = pairConfig.direction();
-
-            String firstChannelId = firstChannel.channelId();
-            String secondChannelId = secondChannel.channelId();
-
-            if (!originChannelId.equals(firstChannelId) && !originChannelId.equals(secondChannelId)) {
-                continue;
+            ChannelConfig origin = null;
+            for (ChannelConfig member : members) {
+                if (originChannelId.equals(member.channelId())) {
+                    origin = member;
+                    break;
+                }
             }
 
-            if (disLink.jda().getGuildChannelById(firstChannelId) == null) {
-                disLink.debug("A message has been sent in a channel listen in the config, however the destination channel (" + firstChannelId + ") doesn't exist ");
-                continue;
-            }
+            if (origin == null) continue;
+            if (!group.canSend(origin)) continue;
 
-            if (disLink.jda().getGuildChannelById(secondChannelId) == null) {
-                disLink.debug("A message has been sent in a channel listen in the config, however the destination channel (" + secondChannelId + ") doesn't exist ");
-                continue;
-            }
+            for (ChannelConfig destination : members) {
+                if (destination == origin) continue;
+                if (!group.canReceive(destination)) continue;
 
-            if (originChannelId.equals(firstChannelId)) {
+                String destinationId = destination.channelId();
+                if (destinationId == null || destinationId.isEmpty()) continue;
 
-                if (direction.equals(Direction.BOTH) || direction.equals(Direction.FIRST_TO_SECOND))
-                    channels.put(pairConfig, secondChannel);
-            }
+                if (disLink.jda().getGuildChannelById(destinationId) == null) {
+                    disLink.debug("A message has been sent in a channel listed in the config, however the destination channel (" + destinationId + ") doesn't exist ");
+                    continue;
+                }
 
-            if (originChannelId.equals(secondChannelId)) {
-
-                if (direction.equals(Direction.BOTH) || direction.equals(Direction.SECOND_TO_FIRST))
-                    channels.put(pairConfig, firstChannel);
-
+                routes.add(new Route(group, origin, destination));
             }
         }
 
-        return channels;
+        return routes;
     }
 
     private boolean invalidAuthor(ChannelPairConfig channelPair, MessageReceivedEvent event) {
