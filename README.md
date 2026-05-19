@@ -1,4 +1,8 @@
 # DisLink V2
+
+> :warning: This code is quite old, and realistically I should probably rewrite it from scratch. It probably has bugs, but as of now I do not have time to rewrite it.
+> Use this at your own risk, its only staying up because some people still find is useful!
+
 DisLink is a Discord bot used to forward messages between Discord channels. This can be done across guilds or within the same guild. Thread channels are also supported
 
 If you need support with DisLink please [join my Discord server](https://discord.gg/vwwe3ThHxK)
